@@ -1,60 +1,60 @@
+version: '3.8'
+
 services:
   api:
     container_name: evolution_api
     image: evoapicloud/evolution-api:latest
     restart: always
     depends_on:
-      - redis
       - postgres
-    ports:
-      - 3001:8080
-    volumes:
-      - evolution_instances:/evolution/instances
-    networks:
-      - evolution-net
+      - redis
     env_file:
       - .env
+    command: sh -c "node dist/main"
     expose:
       - 8080
-
-  redis:
-    image: redis:latest
-    networks:
-      - evolution-net
-    container_name: redis
-    command: >
-      redis-server --port 6379 --appendonly yes
     volumes:
-      - evolution_redis:/data
-    ports:
-      - 6379:6379
+      - evolution_instances:/evolution/instances
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/ || exit 1"]
+      interval: 5s
+      timeout: 10s
+      retries: 5
 
   postgres:
     container_name: postgres
     image: postgres:15
-    networks:
-      - evolution-net
-    command: ["postgres", "-c", "max_connections=1000", "-c", "listen_addresses=*"]
     restart: always
-    ports:
-      - 5432:5432
     environment:
-      - POSTGRES_USER=user
-      - POSTGRES_PASSWORD=pass
-      - POSTGRES_DB=evolution
-      - POSTGRES_HOST_AUTH_METHOD=trust
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: pass
+      POSTGRES_DB: evolution
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    expose:
-      - 5432
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d evolution"]
+      interval: 5s
+      timeout: 10s
+      retries: 5
+
+  redis:
+    container_name: redis
+    image: redis:latest
+    command: redis-server --port 6379 --appendonly yes
+    restart: always
+    volumes:
+      - evolution_redis:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 10s
+      retries: 5
 
 volumes:
   evolution_instances:
-  evolution_redis:
   postgres_data:
-
-
-networks:
-  evolution-net:
-    name: evolution-net
-    driver: bridge
+  evolution_redis:
